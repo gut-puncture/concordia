@@ -188,6 +188,11 @@ doc = interactive_document_tools.InteractiveDocumentWithTools(
     tools=[web_search_tool, calculator_tool],
     max_tool_calls_per_question=3,  # Budget per question
     max_tool_result_length=1000,    # Truncation limit
+    # Optional tool-call policy.
+    policy=None,
+    # "observe" (default) records decisions without blocking calls.
+    # "enforce" applies ALLOW / DENY / EDIT decisions.
+    enforcement_mode="observe",
 )
 
 # Build context
@@ -205,6 +210,42 @@ print(doc.text())
 # [Tool Result: Bitcoin is currently trading at $45,000...]
 # Answer: Bitcoin is currently trading at approximately $45,000.
 ```
+
+### Policy-Aware Tool Execution
+
+`InteractiveDocumentWithTools` supports optional policy decisions through
+`concordia.document.tool_policy`. Policies can inspect each tool call and
+return one of:
+
+*   `ALLOW`: execute with original arguments.
+*   `DENY`: block execution in `enforcement_mode="enforce"`.
+*   `EDIT`: execute rewritten arguments in `enforcement_mode="enforce"`.
+
+In `enforcement_mode="observe"` (default), decisions are logged but tool
+execution remains unchanged for backward compatibility.
+
+```python
+from concordia.document import tool_policy
+
+class BlockDestructivePolicy:
+    def evaluate(self, call, available_tools):
+        tool = available_tools.get(call.tool_name)
+        if tool and tool.risk_level == "destructive":
+            return tool_policy.PolicyDecision(
+                action=tool_policy.PolicyAction.DENY,
+                reason="Destructive tools are disabled in this simulation.",
+            )
+        return tool_policy.PolicyDecision()
+```
+
+Policy events are recorded with tags such as:
+
+*   `tool_policy`
+*   `tool_policy_allow`
+*   `tool_policy_deny_observed`
+*   `tool_policy_edit_observed`
+*   `tool_policy_deny_enforced`
+*   `tool_policy_edit_enforced`
 
 ### Tool Call Format
 
